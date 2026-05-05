@@ -1,0 +1,54 @@
+請幫我建立一個簡單的 Next.js 、 WebSocket、Vercel，Pusher、MongoDB:
+
+一個極簡單的聊天室 (simple chat)
+一開始使用者只要給 userID 即可開始使用，不用 password 登入
+測試情境：兩個使用者分別使用 browser 打開兩個 simple chat, 用自己的 userID 登入，然後指定對方為 chat 的對象，開始聊天，雙方應該要即時可以看到聊天的訊息
+最主要是測試 Next.js 與 Pusher 的功能，至於 DB, UI 等，盡量簡單即可
+
+請使用 yarn, 而不要使用 npm
+
+######################################################
+
+Plan: Minimal Next.js + Pusher Chatroom
+建立一個極簡單的聊天室，重點在於 Next.js 與 Pusher 的即時訊息功能，MongoDB 僅作為訊息儲存，UI 與驗證流程極簡。使用 yarn 作為套件管理工具。
+
+Steps
+
+1. 專案初始化與基本設定
+使用 yarn 初始化 Next.js 專案
+安裝必要套件：Pusher、Pusher-js、mongoose、dotenv
+設定 Vercel 部署相關檔案（如 .vercelignore, vercel.json）
+2. Pusher 與 MongoDB 設定
+設定 Pusher 帳號與環境變數（PUSHER_APP_ID, KEY, SECRET, CLUSTER）
+設定 MongoDB 連線（MONGODB_URI）
+3. 極簡聊天室功能
+前端頁面：輸入 userID 登入，選擇對象 userID，進入聊天室
+訊息輸入框與訊息顯示區
+送出訊息時，呼叫 Next.js API route，將訊息存入 MongoDB 並透過 Pusher 廣播
+另一端即時收到訊息（Pusher 前端訂閱）
+4. API 與後端邏輯
+API route：/api/message
+POST：儲存訊息到 MongoDB，並用 Pusher 廣播
+GET：取得歷史訊息（可選，僅顯示最近幾則）
+5. 驗證與測試
+兩個瀏覽器分別以不同 userID 登入，互相指定對方 userID 聊天
+訊息能即時同步顯示
+Relevant files
+
+pages/index.tsx — 登入與聊天室 UI
+pages/api/message.ts — 訊息 API route
+lib/pusher.ts — Pusher 設定
+lib/mongodb.ts — MongoDB 連線
+.env.local — 環境變數
+vercel.json — Vercel 設定（如需）
+Verification
+
+yarn dev 啟動本地測試，兩個 userID 能互相即時聊天
+部署到 Vercel，測試跨瀏覽器即時訊息
+MongoDB 有訊息紀錄
+Decisions
+
+不做密碼驗證，僅 userID
+UI 極簡，僅基本訊息顯示與輸入
+只測試一對一聊天，不做聊天室列表或群聊
+主要驗證 Next.js + Pusher 即時功能

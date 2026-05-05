@@ -1,65 +1,204 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+import { useEffect, useRef, useState } from 'react';
+import Pusher from 'pusher-js';
+
+interface Message {
+  _id: string;
+  from: string;
+  to: string;
+  text: string;
+  createdAt: string;
+}
+
+type Stage = 'login' | 'select-target' | 'chat';
+
+export default function ChatPage() {
+  const [stage, setStage] = useState<Stage>('login');
+  const [userID, setUserID] = useState('');
+  const [targetID, setTargetID] = useState('');
+  const [inputUser, setInputUser] = useState('');
+  const [inputTarget, setInputTarget] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newText, setNewText] = useState('');
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom whenever messages update
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Set up Pusher subscription when chat starts
+  useEffect(() => {
+    if (stage !== 'chat') return;
+
+    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+    });
+
+    const channelName = `chat-${[userID, targetID].sort().join('-')}`;
+    const ch = pusher.subscribe(channelName);
+
+    ch.bind('new-message', (data: Message) => {
+      setMessages((prev) => [...prev, data]);
+    });
+
+    // Load history
+    fetch(`/api/message?user1=${encodeURIComponent(userID)}&user2=${encodeURIComponent(targetID)}`)
+      .then((r) => r.json())
+      .then((data) => setMessages(data.messages ?? []));
+
+    return () => {
+      ch.unbind_all();
+      pusher.unsubscribe(channelName);
+      pusher.disconnect();
+    };
+  }, [stage, userID, targetID]);
+
+  async function sendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newText.trim() || sending) return;
+    setSending(true);
+    try {
+      await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: userID, to: targetID, text: newText.trim() }),
+      });
+      setNewText('');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // ---- Render ----
+
+  if (stage === 'login') {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <form
+          className="flex flex-col gap-4 rounded-2xl bg-white p-10 shadow-md w-80"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!inputUser.trim()) return;
+            setUserID(inputUser.trim());
+            setStage('select-target');
+          }}
+        >
+          <h1 className="text-2xl font-bold text-center text-gray-800">Simple Chat</h1>
+          <input
+            className="rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Enter your User ID"
+            value={inputUser}
+            onChange={(e) => setInputUser(e.target.value)}
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-blue-500 py-2 text-white font-semibold hover:bg-blue-600 transition"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            Enter
+          </button>
+        </form>
       </main>
-    </div>
+    );
+  }
+
+  if (stage === 'select-target') {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <form
+          className="flex flex-col gap-4 rounded-2xl bg-white p-10 shadow-md w-80"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!inputTarget.trim()) return;
+            setTargetID(inputTarget.trim());
+            setStage('chat');
+          }}
+        >
+          <h1 className="text-2xl font-bold text-center text-gray-800">Logged in as</h1>
+          <p className="text-center text-blue-600 font-mono font-semibold text-lg">{userID}</p>
+          <input
+            className="rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Chat with (User ID)"
+            value={inputTarget}
+            onChange={(e) => setInputTarget(e.target.value)}
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-green-500 py-2 text-white font-semibold hover:bg-green-600 transition"
+          >
+            Start Chat
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  // Chat stage
+  return (
+    <main className="flex flex-col h-screen bg-gray-100">
+      {/* Header */}
+      <header className="flex items-center justify-between bg-blue-600 px-6 py-3 text-white shadow">
+        <span className="font-semibold">You: <span className="font-mono">{userID}</span></span>
+        <span className="text-sm opacity-80">↔</span>
+        <span className="font-semibold">Chat with: <span className="font-mono">{targetID}</span></span>
+      </header>
+
+      {/* Messages */}
+      <section className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        {messages.length === 0 && (
+          <p className="text-center text-gray-400 mt-10">No messages yet. Say hello!</p>
+        )}
+        {messages.map((msg) => {
+          const isMine = msg.from === userID;
+          return (
+            <div key={msg._id ?? msg.createdAt} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-xs rounded-2xl px-4 py-2 text-sm shadow ${
+                  isMine
+                    ? 'bg-blue-500 text-white rounded-br-none'
+                    : 'bg-white text-gray-800 rounded-bl-none'
+                }`}
+              >
+                {!isMine && (
+                  <p className="text-xs font-semibold text-gray-500 mb-1">{msg.from}</p>
+                )}
+                <p>{msg.text}</p>
+                <p className={`text-xs mt-1 text-right ${isMine ? 'text-blue-200' : 'text-gray-400'}`}>
+                  {new Date(msg.createdAt).toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </section>
+
+      {/* Input */}
+      <form
+        className="flex gap-2 border-t border-gray-200 bg-white px-4 py-3"
+        onSubmit={sendMessage}
+      >
+        <input
+          className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="Type a message..."
+          value={newText}
+          onChange={(e) => setNewText(e.target.value)}
+          disabled={sending}
+        />
+        <button
+          type="submit"
+          disabled={!newText.trim() || sending}
+          className="rounded-full bg-blue-500 px-5 py-2 text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 transition"
+        >
+          Send
+        </button>
+      </form>
+    </main>
   );
 }
+
+
