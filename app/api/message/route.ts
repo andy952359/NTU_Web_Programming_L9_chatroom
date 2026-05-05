@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB, Message } from '@/lib/mongodb';
-import { pusherServer } from '@/lib/pusher';
+import { getPusherServer } from '@/lib/pusher';
 
 // Helper: deterministic channel name for any two users
 function channelName(a: string, b: string): string {
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
 
     const channel = channelName(from, to);
     const message = await Message.create({ from, to, text, channel });
+    const pusherServer = getPusherServer();
 
     // Broadcast via Pusher
     await pusherServer.trigger(channel, 'new-message', {

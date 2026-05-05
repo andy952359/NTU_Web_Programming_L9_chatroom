@@ -1,9 +1,11 @@
 import mongoose, { Schema, Model, Document } from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable in .env.local');
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+  return uri;
 }
 
 // Cached connection to avoid re-connecting on every hot reload in dev
@@ -21,8 +23,9 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
+    const uri = getMongoUri();
     cached.promise = mongoose
-      .connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
+      .connect(uri, { serverSelectionTimeoutMS: 5000 })
       .then((m) => m)
       .catch((err) => {
         cached.promise = null; // 失敗時重置，讓下次請求重試
