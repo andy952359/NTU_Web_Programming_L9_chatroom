@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB, Message } from '@/lib/mongodb';
 import { getPusherServer } from '@/lib/pusher';
 
+export const dynamic = 'force-dynamic';
+
 // Helper: deterministic channel name for any two users
 function channelName(a: string, b: string): string {
   return `chat-${[a, b].sort().join('-')}`;
