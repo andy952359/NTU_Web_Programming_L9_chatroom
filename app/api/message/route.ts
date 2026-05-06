@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB, Message } from '@/lib/mongodb';
+import { channelName, legacyChannelName } from '@/lib/channel';
 import { getPusherServer } from '@/lib/pusher';
 
 export const dynamic = 'force-dynamic';
-
-// Helper: deterministic channel name for any two users
-function channelName(a: string, b: string): string {
-  return `chat-${[a, b].sort().join('-')}`;
-}
 
 // POST /api/message — send a new message
 export async function POST(req: NextRequest) {
@@ -55,7 +51,8 @@ export async function GET(req: NextRequest) {
     await connectDB();
 
     const channel = channelName(user1, user2);
-    const messages = await Message.find({ channel })
+    const legacyChannel = legacyChannelName(user1, user2);
+    const messages = await Message.find({ channel: { $in: [channel, legacyChannel] } })
       .sort({ createdAt: 1 })
       .limit(50)
       .lean();

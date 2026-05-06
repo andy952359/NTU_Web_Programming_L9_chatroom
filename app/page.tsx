@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Pusher from 'pusher-js';
+import { channelName } from '@/lib/channel';
 
 interface Message {
   _id: string;
@@ -40,7 +41,7 @@ export default function ChatPage() {
   // Set up Pusher subscription when chat starts
   useEffect(() => {
     if (stage !== 'chat') return;
-    const channelName = `chat-${[userID, targetID].sort().join('-')}`;
+    const channel = channelName(userID, targetID);
     const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
     let pusher: Pusher | null = null;
@@ -51,7 +52,7 @@ export default function ChatPage() {
     if (pusherKey && pusherCluster) {
       try {
         pusher = new Pusher(pusherKey, { cluster: pusherCluster });
-        ch = pusher.subscribe(channelName);
+        ch = pusher.subscribe(channel);
         ch.bind('new-message', (data: Message) => {
           appendUniqueMessage(data);
         });
@@ -78,7 +79,7 @@ export default function ChatPage() {
     return () => {
       if (ch) ch.unbind_all();
       if (pusher) {
-        pusher.unsubscribe(channelName);
+        pusher.unsubscribe(channel);
         pusher.disconnect();
       }
     };
