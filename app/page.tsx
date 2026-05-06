@@ -22,7 +22,15 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newText, setNewText] = useState('');
   const [sending, setSending] = useState(false);
+  const [runtimeError, setRuntimeError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  function appendUniqueMessage(msg: Message) {
+    setMessages((prev) => {
+      if (prev.some((m) => m._id === msg._id)) return prev;
+      return [...prev, msg];
+    });
+  }
 
   // Scroll to bottom whenever messages update
   useEffect(() => {
@@ -32,27 +40,47 @@ export default function ChatPage() {
   // Set up Pusher subscription when chat starts
   useEffect(() => {
     if (stage !== 'chat') return;
-
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    });
-
     const channelName = `chat-${[userID, targetID].sort().join('-')}`;
-    const ch = pusher.subscribe(channelName);
+    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    let pusher: Pusher | null = null;
+    let ch: ReturnType<Pusher['subscribe']> | null = null;
 
-    ch.bind('new-message', (data: Message) => {
-      setMessages((prev) => [...prev, data]);
-    });
+    setRuntimeError('');
+
+    if (pusherKey && pusherCluster) {
+      try {
+        pusher = new Pusher(pusherKey, { cluster: pusherCluster });
+        ch = pusher.subscribe(channelName);
+        ch.bind('new-message', (data: Message) => {
+          appendUniqueMessage(data);
+        });
+      } catch {
+        setRuntimeError('Realtime is temporarily unavailable. You can still chat by sending messages.');
+      }
+    } else {
+      setRuntimeError('Realtime config is missing on deployment (NEXT_PUBLIC_PUSHER_*).');
+    }
 
     // Load history
     fetch(`/api/message?user1=${encodeURIComponent(userID)}&user2=${encodeURIComponent(targetID)}`)
-      .then((r) => r.json())
-      .then((data) => setMessages(data.messages ?? []));
+      .then(async (r) => {
+        if (!r.ok) {
+          throw new Error('Failed to load message history');
+        }
+        return r.json();
+      })
+      .then((data) => setMessages(Array.isArray(data.messages) ? data.messages : []))
+      .catch(() => {
+        setRuntimeError((prev) => prev || 'Cannot load messages right now. Please try again later.');
+      });
 
     return () => {
-      ch.unbind_all();
-      pusher.unsubscribe(channelName);
-      pusher.disconnect();
+      if (ch) ch.unbind_all();
+      if (pusher) {
+        pusher.unsubscribe(channelName);
+        pusher.disconnect();
+      }
     };
   }, [stage, userID, targetID]);
 
@@ -61,12 +89,26 @@ export default function ChatPage() {
     if (!newText.trim() || sending) return;
     setSending(true);
     try {
-      await fetch('/api/message', {
+      const res = await fetch('/api/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: userID, to: targetID, text: newText.trim() }),
       });
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error ?? 'Failed to send message');
+      }
+
+      if (payload?.message) {
+        appendUniqueMessage(payload.message as Message);
+      }
+
       setNewText('');
+      setRuntimeError('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send message';
+      setRuntimeError(message);
     } finally {
       setSending(false);
     }
@@ -149,6 +191,11 @@ export default function ChatPage() {
 
       {/* Messages */}
       <section className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        {runtimeError && (
+          <p className="mx-auto mb-4 max-w-xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            {runtimeError}
+          </p>
+        )}
         {messages.length === 0 && (
           <p className="text-center text-gray-400 mt-10">No messages yet. Say hello!</p>
         )}
